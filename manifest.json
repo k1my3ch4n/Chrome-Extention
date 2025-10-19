@@ -1,0 +1,11 @@
+{
+  "manifest_version": 3,
+  "name": "TypeScript + Tailwind Chrome 확장 프로그램",
+  "version": "1.0.0",
+  "description": "TypeScript와 Tailwind CSS를 사용한 현대적인 Chrome 확장 프로그램입니다.",
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "안녕하세요! 👋"
+  },
+  "permissions": []
+}
