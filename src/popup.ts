@@ -1,59 +1,235 @@
 import './styles.css';
+import { YouTubeService } from './youtube-service';
+import { StorageService, AppSettings } from './storage-service';
+import { NotificationService } from './notification-service';
 
 class PopupApp {
-  private button: HTMLButtonElement | null;
-  private message: HTMLElement | null;
+  private setupButton!: HTMLButtonElement;
+  private testButton!: HTMLButtonElement;
+  private stopButton!: HTMLButtonElement;
+  private message!: HTMLElement;
+  private setupSection!: HTMLElement;
+  private statusSection!: HTMLElement;
+  private apiKeyInput!: HTMLInputElement;
+  private channelInput!: HTMLInputElement;
+  private checkIntervalSelect!: HTMLSelectElement;
+  private notificationsCheckbox!: HTMLInputElement;
+  private channelNameElement!: HTMLElement;
+  private lastCheckElement!: HTMLElement;
+  private statusIndicator!: HTMLElement;
+
+  private youtubeService: YouTubeService | null = null;
+  private settings: AppSettings | null = null;
 
   constructor() {
-    this.button = null;
-    this.message = null;
+    this.initializeElements();
     this.init();
   }
 
   private init(): void {
     document.addEventListener('DOMContentLoaded', () => {
-      this.initializeElements();
       this.attachEventListeners();
+      this.loadSettings();
     });
   }
 
   private initializeElements(): void {
-    this.button = document.getElementById('clickMe') as HTMLButtonElement;
+    this.setupButton = document.getElementById('setupButton') as HTMLButtonElement;
+    this.testButton = document.getElementById('testButton') as HTMLButtonElement;
+    this.stopButton = document.getElementById('stopButton') as HTMLButtonElement;
     this.message = document.getElementById('message') as HTMLElement;
+    this.setupSection = document.getElementById('setupSection') as HTMLElement;
+    this.statusSection = document.getElementById('statusSection') as HTMLElement;
+    this.apiKeyInput = document.getElementById('apiKey') as HTMLInputElement;
+    this.channelInput = document.getElementById('channelInput') as HTMLInputElement;
+    this.checkIntervalSelect = document.getElementById('checkInterval') as HTMLSelectElement;
+    this.notificationsCheckbox = document.getElementById('notificationsEnabled') as HTMLInputElement;
+    this.channelNameElement = document.getElementById('channelName') as HTMLElement;
+    this.lastCheckElement = document.getElementById('lastCheck') as HTMLElement;
+    this.statusIndicator = document.getElementById('statusIndicator') as HTMLElement;
   }
 
   private attachEventListeners(): void {
-    if (this.button) {
-      this.button.addEventListener('click', this.handleButtonClick.bind(this));
+    if (this.setupButton) {
+      this.setupButton.addEventListener('click', this.handleSetup.bind(this));
+    }
+    if (this.testButton) {
+      this.testButton.addEventListener('click', this.handleTest.bind(this));
+    }
+    if (this.stopButton) {
+      this.stopButton.addEventListener('click', this.handleStop.bind(this));
     }
   }
 
-  private handleButtonClick(): void {
-    if (!this.message) return;
-
-    const messages = [
-      '버튼을 클릭했습니다! 🎉',
-      '훌륭합니다! 👏',
-      '잘했어요! ✨',
-      '멋져요! 🚀',
-      '완벽합니다! 💯'
-    ];
-
-    const randomMessage = messages[Math.floor(Math.random() * messages.length)];
-    
-    this.message.innerHTML = `
-      <div class="animate-pulse">
-        <p class="text-green-600 font-semibold text-sm">${randomMessage}</p>
-        <p class="text-xs text-gray-500 mt-1">클릭 횟수: ${this.getClickCount()}</p>
-      </div>
-    `;
+  private async loadSettings(): Promise<void> {
+    try {
+      this.settings = await StorageService.getSettings();
+      
+      if (this.settings.apiKey) {
+        this.youtubeService = new YouTubeService(this.settings.apiKey);
+        this.showStatusView();
+        this.updateStatusDisplay();
+      } else {
+        this.showSetupView();
+      }
+    } catch (error) {
+      console.error('Error loading settings:', error);
+      this.showMessage('설정을 불러오는 중 오류가 발생했습니다.', 'error');
+    }
   }
 
-  private getClickCount(): number {
-    const count = localStorage.getItem('clickCount');
-    const newCount = count ? parseInt(count) + 1 : 1;
-    localStorage.setItem('clickCount', newCount.toString());
-    return newCount;
+  private showSetupView(): void {
+    if (this.setupSection) this.setupSection.classList.remove('hidden');
+    if (this.statusSection) this.statusSection.classList.add('hidden');
+    if (this.stopButton) this.stopButton.classList.add('hidden');
+    if (this.testButton) this.testButton.classList.add('hidden');
+  }
+
+  private showStatusView(): void {
+    if (this.setupSection) this.setupSection.classList.add('hidden');
+    if (this.statusSection) this.statusSection.classList.remove('hidden');
+    if (this.stopButton) this.stopButton.classList.remove('hidden');
+    if (this.testButton) this.testButton.classList.remove('hidden');
+  }
+
+  private async handleSetup(): Promise<void> {
+    if (!this.apiKeyInput || !this.channelInput || !this.checkIntervalSelect || !this.notificationsCheckbox) {
+      return;
+    }
+
+    const apiKey = this.apiKeyInput.value.trim();
+    const channelInput = this.channelInput.value.trim();
+    const checkInterval = parseInt(this.checkIntervalSelect.value);
+    const notificationsEnabled = this.notificationsCheckbox.checked;
+
+    if (!apiKey) {
+      this.showMessage('API 키를 입력해주세요.', 'error');
+      return;
+    }
+
+    if (!channelInput) {
+      this.showMessage('채널 URL 또는 ID를 입력해주세요.', 'error');
+      return;
+    }
+
+    try {
+      this.showMessage('설정 중...', 'info');
+      
+      this.youtubeService = new YouTubeService(apiKey);
+      
+      // 채널 ID 추출
+      let channelId = this.youtubeService.extractChannelIdFromUrl(channelInput);
+      
+      if (!channelId) {
+        this.showMessage('유효하지 않은 채널 URL입니다.', 'error');
+        return;
+      }
+
+      // 채널 정보 확인
+      const channelInfo = await this.youtubeService.getChannelInfo(channelId);
+      if (!channelInfo) {
+        this.showMessage('채널을 찾을 수 없습니다.', 'error');
+        return;
+      }
+
+      // 설정 저장
+      const settings: AppSettings = {
+        apiKey,
+        channelId,
+        channelName: channelInfo.title,
+        checkInterval,
+        lastCheckTime: new Date().toISOString(),
+        lastVideoId: '',
+        notificationsEnabled
+      };
+
+      await StorageService.saveSettings(settings);
+      this.settings = settings;
+
+      // 알림 권한 요청
+      if (notificationsEnabled) {
+        await NotificationService.requestPermission();
+      }
+
+      // 백그라운드 스크립트에 설정 전달
+      chrome.runtime.sendMessage({ action: 'startMonitoring', settings });
+
+      this.showStatusView();
+      this.updateStatusDisplay();
+      this.showMessage('설정이 완료되었습니다!', 'success');
+
+      // 설정 완료 알림
+      if (notificationsEnabled) {
+        await NotificationService.showSetupCompleteNotification(channelInfo.title);
+      }
+
+    } catch (error) {
+      console.error('Setup error:', error);
+      this.showMessage('설정 중 오류가 발생했습니다: ' + (error as Error).message, 'error');
+    }
+  }
+
+  private async handleTest(): Promise<void> {
+    if (!this.youtubeService || !this.settings) {
+      this.showMessage('먼저 설정을 완료해주세요.', 'error');
+      return;
+    }
+
+    try {
+      this.showMessage('채널을 확인하는 중...', 'info');
+      
+      const videos = await this.youtubeService.getLatestVideos(this.settings.channelId, 1);
+      
+      if (videos.length > 0) {
+        const latestVideo = videos[0];
+        this.showMessage(`최신 영상: "${latestVideo.title}"`, 'success');
+      } else {
+        this.showMessage('영상을 찾을 수 없습니다.', 'warning');
+      }
+    } catch (error) {
+      console.error('Test error:', error);
+      this.showMessage('테스트 중 오류가 발생했습니다: ' + (error as Error).message, 'error');
+    }
+  }
+
+  private async handleStop(): Promise<void> {
+    try {
+      chrome.runtime.sendMessage({ action: 'stopMonitoring' });
+      await StorageService.clearSettings();
+      this.settings = null;
+      this.youtubeService = null;
+      this.showSetupView();
+      this.showMessage('모니터링이 중지되었습니다.', 'info');
+    } catch (error) {
+      console.error('Stop error:', error);
+      this.showMessage('중지 중 오류가 발생했습니다.', 'error');
+    }
+  }
+
+  private updateStatusDisplay(): void {
+    if (!this.settings || !this.channelNameElement || !this.lastCheckElement) {
+      return;
+    }
+
+    this.channelNameElement.textContent = this.settings.channelName;
+    this.lastCheckElement.textContent = `마지막 체크: ${new Date(this.settings.lastCheckTime).toLocaleString()}`;
+  }
+
+  private showMessage(text: string, type: 'success' | 'error' | 'warning' | 'info'): void {
+    if (!this.message) return;
+
+    const colors = {
+      success: 'text-green-600',
+      error: 'text-red-600',
+      warning: 'text-yellow-600',
+      info: 'text-blue-600'
+    };
+
+    this.message.innerHTML = `
+      <div class="animate-pulse">
+        <p class="${colors[type]} font-semibold text-sm">${text}</p>
+      </div>
+    `;
   }
 }
 

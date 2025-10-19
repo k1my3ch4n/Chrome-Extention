@@ -7,5 +7,13 @@
     "default_popup": "popup.html",
     "default_title": "안녕하세요! 👋"
   },
-  "permissions": []
+  "permissions": [
+    "notifications",
+    "storage",
+    "alarms",
+    "background"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  }
 }
