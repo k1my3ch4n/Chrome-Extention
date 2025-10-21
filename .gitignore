@@ -102,3 +102,7 @@ jspm_packages/
 # Temporary files
 tmp/
 temp/
+
+# Environment config (contains sensitive data)
+config.js
+.env

@@ -1,6 +1,8 @@
 const path = require('path');
 const HtmlWebpackPlugin = require('html-webpack-plugin');
 const CopyWebpackPlugin = require('copy-webpack-plugin');
+const webpack = require('webpack');
+const config = require('./config');
 
 module.exports = {
   entry: {
@@ -45,6 +47,9 @@ module.exports = {
           to: 'manifest.json',
         },
       ],
+    }),
+    new webpack.DefinePlugin({
+      'process.env.GOOGLE_CLIENT_ID': JSON.stringify(config.GOOGLE_CLIENT_ID),
     }),
   ],
   optimization: {

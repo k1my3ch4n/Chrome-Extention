@@ -2,11 +2,14 @@ import './styles.css';
 import { YouTubeService } from './youtube-service';
 import { StorageService, AppSettings } from './storage-service';
 import { NotificationService } from './notification-service';
+import { AuthService, GOOGLE_CLIENT_ID } from './auth-service';
 
 class PopupApp {
   private setupButton!: HTMLButtonElement;
   private testButton!: HTMLButtonElement;
   private stopButton!: HTMLButtonElement;
+  private loginButton!: HTMLButtonElement;
+  private logoutButton!: HTMLButtonElement;
   private message!: HTMLElement;
   private setupSection!: HTMLElement;
   private statusSection!: HTMLElement;
@@ -37,6 +40,8 @@ class PopupApp {
     this.setupButton = document.getElementById('setupButton') as HTMLButtonElement;
     this.testButton = document.getElementById('testButton') as HTMLButtonElement;
     this.stopButton = document.getElementById('stopButton') as HTMLButtonElement;
+    this.loginButton = document.getElementById('loginButton') as HTMLButtonElement;
+    this.logoutButton = document.getElementById('logoutButton') as HTMLButtonElement;
     this.message = document.getElementById('message') as HTMLElement;
     this.setupSection = document.getElementById('setupSection') as HTMLElement;
     this.statusSection = document.getElementById('statusSection') as HTMLElement;
@@ -59,12 +64,25 @@ class PopupApp {
     if (this.stopButton) {
       this.stopButton.addEventListener('click', this.handleStop.bind(this));
     }
+    if (this.loginButton) {
+      this.loginButton.addEventListener('click', this.handleLogin.bind(this));
+    }
+    if (this.logoutButton) {
+      this.logoutButton.addEventListener('click', this.handleLogout.bind(this));
+    }
   }
 
   private async loadSettings(): Promise<void> {
     try {
       this.settings = await StorageService.getSettings();
-      
+      // OAuth 토큰 존재 시 로그인 상태로 전환
+      const token = await AuthService.getValidAccessToken();
+      if (token) {
+        this.showStatusView();
+        this.updateAuthButtons(true);
+        return;
+      }
+
       if (this.settings.apiKey) {
         this.youtubeService = new YouTubeService(this.settings.apiKey);
         this.showStatusView();
@@ -83,6 +101,7 @@ class PopupApp {
     if (this.statusSection) this.statusSection.classList.add('hidden');
     if (this.stopButton) this.stopButton.classList.add('hidden');
     if (this.testButton) this.testButton.classList.add('hidden');
+    this.updateAuthButtons(false);
   }
 
   private showStatusView(): void {
@@ -90,9 +109,22 @@ class PopupApp {
     if (this.statusSection) this.statusSection.classList.remove('hidden');
     if (this.stopButton) this.stopButton.classList.remove('hidden');
     if (this.testButton) this.testButton.classList.remove('hidden');
+    this.updateAuthButtons(true);
+  }
+
+  private updateAuthButtons(isLoggedIn: boolean): void {
+    if (!this.loginButton || !this.logoutButton) return;
+    if (isLoggedIn) {
+      this.loginButton.classList.add('hidden');
+      this.logoutButton.classList.remove('hidden');
+    } else {
+      this.loginButton.classList.remove('hidden');
+      this.logoutButton.classList.add('hidden');
+    }
   }
 
   private async handleSetup(): Promise<void> {
+    // 기존 API Key 기반 설정은 유지하되, OAuth 도입 이후엔 미사용 가능
     if (!this.apiKeyInput || !this.channelInput || !this.checkIntervalSelect || !this.notificationsCheckbox) {
       return;
     }
@@ -166,6 +198,35 @@ class PopupApp {
     } catch (error) {
       console.error('Setup error:', error);
       this.showMessage('설정 중 오류가 발생했습니다: ' + (error as Error).message, 'error');
+    }
+  }
+
+  private async handleLogin(): Promise<void> {
+    // if (GOOGLE_CLIENT_ID === 'REPLACE_WITH_YOUR_GOOGLE_CLIENT_ID') {
+    //   this.showMessage('GCP 클라이언트 ID를 설정해주세요.', 'error');
+    //   return;
+    // }
+    try {
+      this.showMessage('Google 로그인 중...', 'info');
+      const tokens = await AuthService.signIn();
+      if (tokens.accessToken) {
+        this.showMessage('로그인 완료!', 'success');
+        this.showStatusView();
+      }
+    } catch (e) {
+      console.error(e);
+      this.showMessage('로그인에 실패했습니다.', 'error');
+    }
+  }
+
+  private async handleLogout(): Promise<void> {
+    try {
+      await AuthService.signOut();
+      this.showMessage('로그아웃되었습니다.', 'info');
+      this.showSetupView();
+    } catch (e) {
+      console.error(e);
+      this.showMessage('로그아웃 중 오류가 발생했습니다.', 'error');
     }
   }
 
