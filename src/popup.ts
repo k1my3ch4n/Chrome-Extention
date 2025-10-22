@@ -1,5 +1,5 @@
 import './styles.css';
-import { YouTubeService } from './youtube-service';
+import { YouTubeService, YouTubeSubscription } from './youtube-service';
 import { StorageService, AppSettings } from './storage-service';
 import { NotificationService } from './notification-service';
 import { AuthService, GOOGLE_CLIENT_ID } from './auth-service';
@@ -202,20 +202,23 @@ class PopupApp {
   }
 
   private async handleLogin(): Promise<void> {
-    // if (GOOGLE_CLIENT_ID === 'REPLACE_WITH_YOUR_GOOGLE_CLIENT_ID') {
-    //   this.showMessage('GCP 클라이언트 ID를 설정해주세요.', 'error');
-    //   return;
-    // }
     try {
       this.showMessage('Google 로그인 중...', 'info');
       const tokens = await AuthService.signIn();
       if (tokens.accessToken) {
-        this.showMessage('로그인 완료!', 'success');
+        this.showMessage('구독 목록을 불러오는 중...', 'info');
+        
+        // 구독 목록 불러오기
+        const subscriptions = await YouTubeService.getSubscriptions(tokens.accessToken);
+        console.log('구독 목록:', subscriptions);
+        
+        this.showMessage(`로그인 완료! ${subscriptions.length}개 채널을 찾았습니다.`, 'success');
         this.showStatusView();
+        this.updateStatusDisplay();
       }
     } catch (e) {
       console.error(e);
-      this.showMessage('로그인에 실패했습니다.', 'error');
+      this.showMessage('로그인에 실패했습니다: ' + (e as Error).message, 'error');
     }
   }
 

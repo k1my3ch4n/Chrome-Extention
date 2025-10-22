@@ -15,12 +15,60 @@ export interface YouTubeChannel {
   subscriberCount: string;
 }
 
+export interface YouTubeSubscription {
+  id: string;
+  channelId: string;
+  channelTitle: string;
+  channelDescription: string;
+  thumbnailUrl: string;
+  publishedAt: string;
+}
+
 export class YouTubeService {
   private apiKey: string;
   private baseUrl = 'https://www.googleapis.com/youtube/v3';
 
   constructor(apiKey: string) {
     this.apiKey = apiKey;
+  }
+
+  /**
+   * OAuth 토큰을 사용하여 사용자의 구독 목록을 가져옵니다
+   */
+  static async getSubscriptions(accessToken: string, maxResults: number = 50): Promise<YouTubeSubscription[]> {
+    try {
+      const response = await fetch(
+        `https://www.googleapis.com/youtube/v3/subscriptions?part=snippet&mine=true&maxResults=${maxResults}`,
+        {
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      
+      if (!data.items) {
+        return [];
+      }
+
+      return data.items.map((item: any) => ({
+        id: item.id,
+        channelId: item.snippet.resourceId.channelId,
+        channelTitle: item.snippet.title,
+        channelDescription: item.snippet.description,
+        thumbnailUrl: item.snippet.thumbnails.medium?.url || item.snippet.thumbnails.default?.url,
+        publishedAt: item.snippet.publishedAt
+      }));
+    } catch (error) {
+      console.error('Error fetching subscriptions:', error);
+      throw error;
+    }
   }
 
   /**
